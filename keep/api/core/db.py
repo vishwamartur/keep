@@ -31,7 +31,7 @@ from sqlalchemy import (
     null,
     select,
     union,
-    update, asc,
+    update,
 )
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -1299,13 +1299,12 @@ def get_last_alerts(
                 # SQLite version - using JSON
                 incidents_subquery = (
                     session.query(
-                        AlertToIncident.alert_id,
+                        LastAlertToIncident.fingerprint,
                         func.json_group_array(
-                            cast(AlertToIncident.incident_id, String)
+                            cast(LastAlertToIncident.incident_id, String)
                         ).label("incidents"),
                     )
-                    .filter(AlertToIncident.deleted_at == NULL_FOR_DELETED_AT)
-                    .group_by(AlertToIncident.alert_id)
+                    .filter(LastAlertToIncident.deleted_at == NULL_FOR_DELETED_AT)
                     .subquery()
                 )
 
@@ -1313,13 +1312,12 @@ def get_last_alerts(
                 # MySQL version - using GROUP_CONCAT
                 incidents_subquery = (
                     session.query(
-                        AlertToIncident.alert_id,
+                        LastAlertToIncident.fingerprint,
                         func.group_concat(
-                            cast(AlertToIncident.incident_id, String)
+                            cast(LastAlertToIncident.incident_id, String)
                         ).label("incidents"),
                     )
-                    .filter(AlertToIncident.deleted_at == NULL_FOR_DELETED_AT)
-                    .group_by(AlertToIncident.alert_id)
+                    .filter(LastAlertToIncident.deleted_at == NULL_FOR_DELETED_AT)
                     .subquery()
                 )
 
@@ -1327,14 +1325,13 @@ def get_last_alerts(
                 # PostgreSQL version - using string_agg
                 incidents_subquery = (
                     session.query(
-                        AlertToIncident.alert_id,
+                        LastAlertToIncident.fingerprint,
                         func.string_agg(
-                            cast(AlertToIncident.incident_id, String),
+                            cast(LastAlertToIncident.incident_id, String),
                             ",",
                         ).label("incidents"),
                     )
-                    .filter(AlertToIncident.deleted_at == NULL_FOR_DELETED_AT)
-                    .group_by(AlertToIncident.alert_id)
+                    .filter(LastAlertToIncident.deleted_at == NULL_FOR_DELETED_AT)
                     .subquery()
                 )
             else:
@@ -1790,13 +1787,13 @@ def get_rule_distribution(tenant_id, minute=False):
         # Check the dialect
         if session.bind.dialect.name == "mysql":
             time_format = "%Y-%m-%d %H:%i" if minute else "%Y-%m-%d %H"
-            timestamp_format = func.date_format(AlertToIncident.timestamp, time_format)
+            timestamp_format = func.date_format(LastAlertToIncident.timestamp, time_format)
         elif session.bind.dialect.name == "postgresql":
             time_format = "YYYY-MM-DD HH:MI" if minute else "YYYY-MM-DD HH"
-            timestamp_format = func.to_char(AlertToIncident.timestamp, time_format)
+            timestamp_format = func.to_char(LastAlertToIncident.timestamp, time_format)
         elif session.bind.dialect.name == "sqlite":
             time_format = "%Y-%m-%d %H:%M" if minute else "%Y-%m-%d %H"
-            timestamp_format = func.strftime(time_format, AlertToIncident.timestamp)
+            timestamp_format = func.strftime(time_format, LastAlertToIncident.timestamp)
         else:
             raise ValueError("Unsupported database dialect")
         # Construct the query
@@ -1807,13 +1804,13 @@ def get_rule_distribution(tenant_id, minute=False):
                 Incident.id.label("group_id"),
                 Incident.rule_fingerprint.label("rule_fingerprint"),
                 timestamp_format.label("time"),
-                func.count(AlertToIncident.alert_id).label("hits"),
+                func.count(LastAlertToIncident.fingerprint).label("hits"),
             )
             .join(Incident, Rule.id == Incident.rule_id)
-            .join(AlertToIncident, Incident.id == AlertToIncident.incident_id)
+            .join(LastAlertToIncident, Incident.id == LastAlertToIncident.incident_id)
             .filter(
-                AlertToIncident.deleted_at == NULL_FOR_DELETED_AT,
-                AlertToIncident.timestamp >= seven_days_ago,
+                LastAlertToIncident.deleted_at == NULL_FOR_DELETED_AT,
+                LastAlertToIncident.timestamp >= seven_days_ago,
             )
             .filter(Rule.tenant_id == tenant_id)  # Filter by tenant_id
             .group_by(
@@ -2831,15 +2828,15 @@ def assign_alert_to_incident(
 
 
 def is_alert_assigned_to_incident(
-    alert_id: UUID, incident_id: UUID, tenant_id: str
+    fingerprint: str, incident_id: UUID, tenant_id: str
 ) -> bool:
     with Session(engine) as session:
         assigned = session.exec(
-            select(AlertToIncident)
-            .where(AlertToIncident.alert_id == alert_id)
-            .where(AlertToIncident.incident_id == incident_id)
-            .where(AlertToIncident.tenant_id == tenant_id)
-            .where(AlertToIncident.deleted_at == NULL_FOR_DELETED_AT)
+            select(LastAlertToIncident)
+            .where(LastAlertToIncident.fingerprint == fingerprint)
+            .where(LastAlertToIncident.incident_id == incident_id)
+            .where(LastAlertToIncident.tenant_id == tenant_id)
+            .where(LastAlertToIncident.deleted_at == NULL_FOR_DELETED_AT)
         ).first()
     return assigned is not None
 
@@ -3356,10 +3353,10 @@ def delete_incident_by_id(
         # Delete all associations with alerts:
 
         (
-            session.query(AlertToIncident)
+            session.query(LastAlertToIncident)
             .where(
-                AlertToIncident.tenant_id == tenant_id,
-                AlertToIncident.incident_id == incident.id,
+                LastAlertToIncident.tenant_id == tenant_id,
+                LastAlertToIncident.incident_id == incident.id,
             )
             .delete()
         )
@@ -3389,7 +3386,7 @@ def get_incident_alerts_and_links_by_incident_id(
     offset: Optional[int] = 0,
     session: Optional[Session] = None,
     include_unlinked: bool = False,
-) -> tuple[List[tuple[Alert, AlertToIncident]], int]:
+) -> tuple[List[tuple[Alert, LastAlertToIncident]], int]:
     with existed_or_new_session(session) as session:
 
         query = (
@@ -3422,7 +3419,7 @@ def get_incident_alerts_and_links_by_incident_id(
 
 def get_incident_alerts_by_incident_id(*args, **kwargs) -> tuple[List[Alert], int]:
     """
-    Unpacking (List[(Alert, AlertToIncident)], int) to (List[Alert], int).
+    Unpacking (List[(Alert, LastAlertToIncident)], int) to (List[Alert], int).
     """
     alerts_and_links, total_alerts = get_incident_alerts_and_links_by_incident_id(
         *args, **kwargs
@@ -3753,8 +3750,8 @@ def remove_alerts_to_incident_by_incident_id(
             .join(LastAlertToIncident, LastAlert.fingerprint == LastAlertToIncident.fingerprint)
             .join(Alert, LastAlert.alert_id == Alert.id)
             .filter(
-                AlertToIncident.deleted_at == NULL_FOR_DELETED_AT,
-                AlertToIncident.incident_id == incident_id,
+                LastAlertToIncident.deleted_at == NULL_FOR_DELETED_AT,
+                LastAlertToIncident.incident_id == incident_id,
                 col(Alert.provider_type).in_(alerts_data_for_incident["sources"]),
             )
         )
@@ -4241,12 +4238,13 @@ def get_workflow_executions_for_incident_or_alert(
         # Query for workflow executions associated with alerts tied to the incident
         alert_query = (
             base_query.join(
-                Alert, WorkflowToAlertExecution.alert_fingerprint == Alert.fingerprint
+                LastAlert, WorkflowToAlertExecution.alert_fingerprint == LastAlert.fingerprint
             )
-            .join(AlertToIncident, Alert.id == AlertToIncident.alert_id)
+            .join(Alert, LastAlert.alert_id == Alert.id)
+            .join(LastAlertToIncident, Alert.fingerprint == LastAlertToIncident.fingerprint)
             .where(
-                AlertToIncident.deleted_at == NULL_FOR_DELETED_AT,
-                AlertToIncident.incident_id == incident_id,
+                LastAlertToIncident.deleted_at == NULL_FOR_DELETED_AT,
+                LastAlertToIncident.incident_id == incident_id,
             )
         )
 
@@ -4397,11 +4395,12 @@ def get_alerts_metrics_by_provider(
                 Alert.provider_id,
                 func.count(Alert.id).label("total_alerts"),
                 func.sum(
-                    case([(AlertToIncident.alert_id.isnot(None), 1)], else_=0)
+                    case([(LastAlertToIncident.fingerprint.isnot(None), 1)], else_=0)
                 ).label("correlated_alerts"),
                 *dynamic_field_sums,
             )
-            .outerjoin(AlertToIncident, Alert.id == AlertToIncident.alert_id)
+            .join(LastAlert, Alert.id == LastAlert.alert_id)
+            .outerjoin(LastAlertToIncident, LastAlert.fingerprint == LastAlertToIncident.fingerprint)
             .filter(
                 Alert.tenant_id == tenant_id,
             )
