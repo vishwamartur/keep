@@ -1305,6 +1305,7 @@ def get_last_alerts(
                         ).label("incidents"),
                     )
                     .filter(LastAlertToIncident.deleted_at == NULL_FOR_DELETED_AT)
+                    .group_by(LastAlertToIncident.fingerprint)
                     .subquery()
                 )
 
@@ -1318,6 +1319,7 @@ def get_last_alerts(
                         ).label("incidents"),
                     )
                     .filter(LastAlertToIncident.deleted_at == NULL_FOR_DELETED_AT)
+                    .group_by(LastAlertToIncident.fingerprint)
                     .subquery()
                 )
 
@@ -1332,6 +1334,7 @@ def get_last_alerts(
                         ).label("incidents"),
                     )
                     .filter(LastAlertToIncident.deleted_at == NULL_FOR_DELETED_AT)
+                    .group_by(LastAlertToIncident.fingerprint)
                     .subquery()
                 )
             else:
