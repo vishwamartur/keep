@@ -47,7 +47,7 @@ const AlertAssociateIncidentModal = ({
           Authorization: `Bearer ${session?.accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(alerts.map(({ event_id }) => event_id)),
+        body: JSON.stringify(alerts.map(({ fingerprint }) => fingerprint)),
       });
       if (response.ok) {
         handleSuccess();

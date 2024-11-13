@@ -3297,7 +3297,6 @@ def update_incident_from_dto_by_id(
                 Incident.tenant_id == tenant_id,
                 Incident.id == incident_id,
             )
-            .options(joinedload(Incident.alerts))
         ).first()
 
         if not incident:
