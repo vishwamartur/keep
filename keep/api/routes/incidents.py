@@ -460,7 +460,7 @@ def get_incident_workflows(
 )
 async def add_alerts_to_incident(
     incident_id: UUID,
-    alert_ids: List[UUID],
+    alert_fingerprints: List[str],
     is_created_by_ai: bool = False,
     authenticated_entity: AuthenticatedEntity = Depends(
         IdentityManagerFactory.get_auth_verifier(["write:incident"])
@@ -470,7 +470,7 @@ async def add_alerts_to_incident(
 ):
     tenant_id = authenticated_entity.tenant_id
     incident_bl = IncidentBl(tenant_id, session, pusher_client)
-    await incident_bl.add_alerts_to_incident(incident_id, alert_ids)
+    await incident_bl.add_alerts_to_incident(incident_id, alert_fingerprints)
     return Response(status_code=202)
 
 
@@ -482,7 +482,7 @@ async def add_alerts_to_incident(
 )
 def delete_alerts_from_incident(
     incident_id: UUID,
-    alert_ids: List[UUID],
+    fingerprints: List[str],
     authenticated_entity: AuthenticatedEntity = Depends(
         IdentityManagerFactory.get_auth_verifier(["write:incident"])
     ),
@@ -492,7 +492,7 @@ def delete_alerts_from_incident(
     tenant_id = authenticated_entity.tenant_id
     incident_bl = IncidentBl(tenant_id, session, pusher_client)
     incident_bl.delete_alerts_from_incident(
-        incident_id=incident_id, alert_ids=alert_ids
+        incident_id=incident_id, alert_fingerprints=fingerprints
     )
     return Response(status_code=202)
 

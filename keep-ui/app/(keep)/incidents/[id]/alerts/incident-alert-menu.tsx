@@ -23,7 +23,7 @@ export default function IncidentAlertMenu({ incidentId, alert }: Props) {
           Authorization: `Bearer ${session?.accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify([alert.event_id]),
+        body: JSON.stringify([alert.fingerprint]),
       }).then((response) => {
         if (response.ok) {
           toast.success("Alert removed from incident successfully", {
